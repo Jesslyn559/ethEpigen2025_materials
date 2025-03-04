@@ -60,7 +60,7 @@ metadata_dm = mcols(query_dm_dna)[, c("description", "genome", "rdataclass","rda
 metadata_dm = metadata_dm[order(metadata_dm$rdatadateadded, decreasing = TRUE), ]
 metadata_dm
 
-# newest mouse genome sequence
+# newest drosophila melanogaster genome sequence
 dm_dna= ah[["AH106160"]]
 dm_dna
 ```
