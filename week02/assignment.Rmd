@@ -1,0 +1,100 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-03-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Using AnnotationHub, find and download the following annotations data:
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(ensembldb)
+  library(GenomicRanges)
+  library(ggplot2)
+})
+```
+
+-   The mouse (Mus Musculus) EnsDb object, version 102, genome build GRCm38
+
+```{r}
+ah = AnnotationHub()
+query_results = query(ah, c("EnsDb", "GRCm38","102"))
+query_results
+
+# basic information of annotation
+ensdb = ah[[names(query_results)]]
+ensdb
+```
+
+-   The mouse genome sequence ( dna_sm ) in TwoBit/2bit format for GRCm38\
+
+```{R}
+# search for mouse genome sequence
+query_mus_dna = query(ah, c("GRCm38", "TwoBit","dna_sm"))
+query_mus_dna
+
+# Obtain metadata of records
+metadata_mus = mcols(query_mus_dna)[, c("description", "genome", "rdataclass","rdatadateadded")]
+metadata_mus = metadata_mus[order(metadata_mus$rdatadateadded, decreasing = TRUE), ]
+metadata_mus
+
+# newest mouse genome sequence
+mus_dna= ah[["AH88477"]]
+mus_dna
+```
+
+-   The drosophila melanogaster genome sequence ( dna_sm ) in TwoBit/2bit format for BDGP6
+
+```{R}
+query_dm_dna = query(ah, c("BDGP6","TwoBit", "dna_sm"))
+query_dm_dna
+
+# Obtain metadata of records
+metadata_dm = mcols(query_dm_dna)[, c("description", "genome", "rdataclass","rdatadateadded")]
+metadata_dm = metadata_dm[order(metadata_dm$rdatadateadded, decreasing = TRUE), ]
+metadata_dm
+
+# newest mouse genome sequence
+dm_dna= ah[["AH106160"]]
+dm_dna
+```
+
+## 2. Using the mouse EnsDb, find the following:
+
+-   How many different ensembl gene IDs and gene symbols are there for protein-coding genes?
+
+```{r}
+# load protein-coding genes
+prcg = genes(ensdb, filter=GeneBiotypeFilter("protein_coding"))
+
+# count number of unique gene IDs and symbols
+unique_id = length(unique(prcg$gene_id))
+unique_symbols = length(unique(prcg$symbol))
+print(paste("Number of different ensembl gene IDs: ", unique_id))
+print(paste("Number of different gene symbols: ", unique_symbols))
+```
+
+-   Plot the distribution of the (spliced) length of protein-coding transcripts
+    -   (tip: this will require you to extract exons of protein-coding transcripts from the database, and split them by transcript, before summing the width of the exons of each transcript)
+
+```{R}
+# extract exons of protein-coding transcripts and group by transcript
+mus_exons = exonsBy(ensdb, by = "tx", filter=TxBiotypeFilter("protein_coding"))
+head(mus_exons, 1)
+
+# sum width of exons for each transcript
+spliced_lengths = lengthOf(mus_exons)
+
+# plot distribution
+ggplot(data.frame(spliced_lengths), aes(x = spliced_lengths)) +
+  geom_histogram(fill = "steelblue", bins = 100) +
+  labs(title = "Distribution of (spliced) length of protein-coding transcripts",
+       x = "Spliced length",
+       y = "Frequency")
+```
