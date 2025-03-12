@@ -1,0 +1,81 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-03-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = TRUE, warning = TRUE, echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(Rsubread)      # read alignment
+  library(rtracklayer)   # read/write genomic file formats
+  library(Biostrings)    # handling sequences (genomic and protein)
+  library(Rfastp)        # read QC/trimming
+  library(epiwraps)
+})
+ah <- AnnotationHub()
+```
+
+# Download the following Drosophila ChIP-seq for the protein CTCF:
+
+[https://www.encodeproject.org/files/ENCFF127RRR/\@\@download/ENCFF127RRR.fastq.gz](https://www.encodeproject.org/files/ENCFF127RRR/@@download/ENCFF127RRR.fastq.gz){.uri}
+
+(no input control for the purpose of this exercise)
+
+```{r, eval=FALSE}
+dir.create("raw")
+download.file("https://www.encodeproject.org/files/ENCFF127RRR/@@download/ENCFF127RRR.fastq.gz", "raw/CTCF.fastq.gz", mode="wb")
+```
+
+```{r, eval=FALSE}
+#QC and trimming
+dir.create("trimmed")
+qc <- Rfastp::rfastp("raw/CTCF.fastq.gz", thread = 4, overrepresentationAnalysis = TRUE, outputFastq = file.path("trimmed/CTCF"))
+```
+
+# Process it from the raw data, obtaining:
+
+## bam file
+```{r, eval=FALSE}
+# download latest DM reference genome
+genome <- ah[["AH106160"]]
+dir.create("BDGP6_genome")
+export(import.2bit(genome), "BDGP6_genome/genome.fasta.gz", compress=TRUE)
+Rsubread::buildindex("BDGP6_genome/rsubread", reference="BDGP6_genome/genome.fasta.gz")
+```
+
+```{r, eval=FALSE}
+dir.create("aligned")
+align.stats <- Rsubread::align(index = "BDGP6_genome/rsubread", type = "dna", 
+                               readfile1 = "trimmed/CTCF_R1.fastq.gz", output_file = "aligned/CTCF.bam", 
+                               nthreads = 6, sortReadsByCoordinates = TRUE)
+align.stats
+```
+
+## peaks
+
+```{r}
+peaks <- callPeaks(bam="aligned/CTCF.bam")
+```
+
+# **Report:**
+
+## how many reads (and what percentage) were mapped
+
+Number of mapped reads: 3505377 (91.8%)
+
+## how many peaks were found
+
+Number of peaks: 2702 regions
+
+## Plot the signal around one of the peaks that is located *inside a gene*.
+
+```{r}
+plotSignalTracks("aligned/CTCF.bam", region=peaks[5],
+                 tracks.params=list(ylim=c(0,20)))
+```
