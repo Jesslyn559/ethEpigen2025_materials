@@ -76,6 +76,6 @@ Number of peaks: 2702 regions
 ## Plot the signal around one of the peaks that is located *inside a gene*.
 
 ```{r}
-plotSignalTracks("aligned/CTCF.bam", region=peaks[5],
-                 tracks.params=list(ylim=c(0,20)))
+plotSignalTracks("aligned/CTCF.bam", region=peaks[5], extend=1000,
+                 tracks.params=list(ylim=c(0,25)))
 ```
