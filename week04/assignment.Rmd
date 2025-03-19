@@ -1,0 +1,66 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-03-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(rtracklayer)
+
+})
+```
+
+## Find and download from ENCODE the peaks (i.e. bed-like format) for the following in mouse embryonic stem cells (mESC) :
+
+*Transcription factor p300*
+
+```{r}
+download.file("https://www.encodeproject.org/files/ENCFF653YVR/@@download/ENCFF653YVR.bed.gz", "p300.bed.gz")
+p300 <- rtracklayer::import("p300.bed.gz", format="narrowPeak")
+#head(p300)
+```
+
+*histone modifications H3K4me3, H3K4me1, H3K27ac, and H3K27me3* (when there are replicates, we recommend using the bed file denoted as “conservative IDR thresholded peaks”)
+
+```{r}
+download.file("https://www.encodeproject.org/files/ENCFF974BMC/@@download/ENCFF974BMC.bed.gz", "h3k4me3.bed.gz")
+h3k4me3 <- rtracklayer::import("h3k4me3.bed.gz", format="narrowPeak")
+#head(h3k4me3)
+
+download.file("https://www.encodeproject.org/files/ENCFF426IIV/@@download/ENCFF426IIV.bed.gz", "h3k4me1.bed.gz")
+h3k4me1 <- rtracklayer::import("h3k4me1.bed.gz", format="narrowPeak")
+#head(h3k4me1)
+
+download.file("https://www.encodeproject.org/files/ENCFF274UIB/@@download/ENCFF274UIB.bed.gz", "h3k27ac.bed.gz")
+h3k27ac <- rtracklayer::import("h3k27ac.bed.gz", format="narrowPeak")
+#head(h3k27ac)
+
+download.file("https://www.encodeproject.org/files/ENCFF008XKX/@@download/ENCFF008XKX.bed.gz", "h3k27me3.bed.gz")
+h3k27me3 <- rtracklayer::import("h3k27me3.bed.gz", format="narrowPeak")
+#head(h3k27me3)
+```
+
+## QUESTION: Of the p300 peaks, what proportion overlap each of the marks?
+
+\* (expected form of the answer: one % for each of the marks)
+
+```{r}
+total_p300 <- length(p300)
+h3k4me3_overlap <- findOverlaps(p300, h3k4me3)
+print(paste("Proportion of p300 that overlaps with H3K4me3: ", round(length(unique(queryHits(h3k4me3_overlap)))/total_p300*100,2), "%"))
+
+h3k4me1_overlap <- findOverlaps(p300, h3k4me1)
+print(paste("Proportion of p300 that overlaps with H3K4me1: ", round(length(unique(queryHits(h3k4me1_overlap)))/total_p300*100, 2), "%"))
+
+h3k27ac_overlap <- findOverlaps(p300, h3k27ac)
+print(paste("Proportion of p300 that overlaps with H3K27ac: ", round(length(unique(queryHits(h3k27ac_overlap)))/total_p300*100, 2), "%"))
+
+h3k27me3_overlap <- findOverlaps(p300, h3k27me3)
+print(paste("Proportion of p300 that overlaps with H3K27me3: ", round(length(unique(queryHits(h3k27me3_overlap)))/total_p300*100, 2), "%"))
+```
