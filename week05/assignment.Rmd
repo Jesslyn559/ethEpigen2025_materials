@@ -1,0 +1,66 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-03-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(rtracklayer)
+  library(epiwraps)
+})
+```
+
+## Using peaks from ENCODE, identify bivalent domains (H3K27me3 + H3K4me3) from (mouse or human) embryonic stem cells (ESC)
+Using mouse ESC:
+
+```{r}
+download.file("https://www.encodeproject.org/files/ENCFF008XKX/@@download/ENCFF008XKX.bed.gz", "h3k27me3_esc.bed.gz")
+h3k27me3_esc <- rtracklayer::import("h3k27me3_esc.bed.gz", format="narrowPeak")
+
+download.file("https://www.encodeproject.org/files/ENCFF974BMC/@@download/ENCFF974BMC.bed.gz", "h3k4me3_esc.bed.gz")
+h3k4me3_esc <- rtracklayer::import("h3k4me3_esc.bed.gz", format="narrowPeak")
+```
+
+```{r}
+## find bivalent domains
+esc_overlap <- findOverlapPairs(h3k27me3_esc, h3k4me3_esc)
+head(esc_overlap)
+
+esc_bivalent <- punion(esc_overlap)
+head(ranges(esc_bivalent))
+```
+
+*Question: what happens to those regions upon differentiation?*
+
+-   Choose *one* differentiated cell type (e.g. erythroblasts, fibroblast, B cells, etc.)
+
+Myoblast cells: C2C12 cell line
+
+-   Download the H3K27me3 and H3K4me3 peaks from this cell type
+```{r}
+download.file("https://www.encodeproject.org/files/ENCFF071FEL/@@download/ENCFF071FEL.bed.gz", "h3k27me3_diff.bed.gz")
+h3k27me3_diff <- rtracklayer::import("h3k27me3_diff.bed.gz", format="narrowPeak")
+
+download.file("https://www.encodeproject.org/files/ENCFF635VQE/@@download/ENCFF635VQE.bed.gz", "h3k4me3_diff.bed.gz")
+h3k4me3_diff <- rtracklayer::import("h3k4me3_diff.bed.gz", format="narrowPeak")
+```
+
+-   How many of the mESC bivalent domains are, in this differentiated cell type, overlapping either mark or their combination (in this differentiated cell type)?
+
+1. 1972 of the mESC bivalent domains overlap with H3K27me3 peaks of the differentiated cell line.
+2. 1133 of the mESC bivalent domains overlap with H3K4me3 peaks of the differentiated cell line.
+3. 224 of the mESC bivalent domains overlap with both H3K27me3 and H3K4me3 peaks of the differentiated cell line.
+
+```{r}
+peaks <- list(h3k27me3_diff, h3k4me3_diff, esc_bivalent)
+names(peaks) <- c("H3K27me3_differentiated", "H3K4me3_differentiated", "mESC_bivalent")
+regionUpset(peaks, reference = peaks$mESC_bivalent, nsets=length(peaks))
+```
+
+(You can use either mouse or human data, just make sure you do everything with the same species!)
