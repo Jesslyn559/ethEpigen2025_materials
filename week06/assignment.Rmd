@@ -1,0 +1,80 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-03-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(ensembldb)
+  library(GenomicRanges)
+  library(motifmatchr) # for scanning sequences for matches of given motifs
+  library(Biostrings) # for handling sequences
+  library(MotifDb) # database of motifs
+  library(TFBSTools) # for handling some motif formats
+  library(universalmotif) # for converting motifs to various formats
+  library(BSgenome.Hsapiens.UCSC.hg38)
+})
+```
+
+## Choose a transcription factor, e.g. CREB1, REST, GATA5, EGR1, GCR
+
+(or any of your choice that has a motif and available ChIPseq data)
+
+-   Download the (e.g. Mouse) peaks for that factor (in whatever cell type)
+```{r}
+## download peaks for CREB1
+download.file("https://www.encodeproject.org/files/ENCFF314KET/@@download/ENCFF314KET.bed.gz",
+              "CREB1.bed.gz")
+peaks_creb1 <- rtracklayer::import("CREB1.bed.gz", format="NarrowPeak")
+```
+
+-   Identify the instances of the factor's motif
+
+```{r}
+motifs <- MotifDb::query(MotifDb, c("CREB1","Hsapiens"))
+names(motifs)
+motif_creb1 <- motifs[["Hsapiens-HOCOMOCOv11-core-A-CREB1_HUMAN.H11MO.0.A"]]
+motif_creb1
+```
+
+## Answer the following questions:
+
+-   Of all the peaks, what proportion contains a motif for the factor?
+
+Expected form of an answer: of the XX peaks, XX (XX%) contain a motif
+
+```{r}
+# Motif scanning
+motif2_creb1 <- convert_motifs(motif_creb1, class="TFBSTools-PWMatrix")
+moi <- motifmatchr::matchMotifs(motif2_creb1, subject=peaks_creb1, genome=BSgenome.Hsapiens.UCSC.hg38,
+                                out="positions")
+peaks_overlap <- sum(overlapsAny(peaks_creb1, moi))
+perc_peaks <- round(peaks_overlap/length(peaks_creb1)*100, 2)
+print(paste("Of the ", length(peaks_creb1), "peaks, ", peaks_overlap, "(", perc_peaks, "%) contain a motif"))
+```
+
+-   Of all instances of that motif in the genome (or in one chromosome),
+    what proportion is bound by the factor (i.e. has a peak)?
+
+Expected form of an answer: of the XX motif instances, XX (XX%) overlap
+a peak
+
+```{r}
+#Scan whole genome for motifs
+seq <- getSeq(BSgenome.Hsapiens.UCSC.hg38)
+motif_across_genome <- matchMotifs(motif2_creb1, subject=seq, out="positions")[[1]]
+names(motif_across_genome) <- names(seq)
+motif_across_genome <- as(motif_across_genome, "GRanges")
+head(motif_across_genome)
+
+motif_overlap <- sum(overlapsAny(motif_across_genome, peaks_creb1))
+perc_motif <- round(motif_overlap/length(motif_across_genome)*100, 2)
+print(paste("Of the ", length(motif_across_genome), "motif instances, ", motif_overlap, "(", perc_motif, "%) contain a motif"))
+```
