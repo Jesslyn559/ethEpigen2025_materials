@@ -1,0 +1,136 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-04-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(AnnotationHub)
+  library(epiwraps)
+  library(motifmatchr)
+  library(MotifDb)
+  library(universalmotif)
+  library(ggplot2)
+  library(SummarizedExperiment) # data structure
+  library(sechm) # for plotting heatmaps from a SummrizedExperiment
+  library(BiocParallel) # for multithreading
+  library(chromVAR) # for motif accessibility estimation
+  library(limma) # for statistical analysis
+})
+
+register(SnowParam(2))
+```
+
+# Download ATAC-seq peak counts in the hippocampus upon stress (subset of the original data, already in SummarizedExperiment format) :
+
+<https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds>
+
+```{r}
+download.file("https://ethz-ins.org/content/mouse_mm38_hippocampus.peakCounts.SE.rds", "mm38_hippo.rds")
+```
+
+# Using this object, perform a chromVAR motif analysis, and run 2 differential motif accessibility analyses, respectively:
+
+For each analysis, report the top most significant motifs, plot a heatmap of the normalized accessibility scores across the samples for those motifs, and write a short paragraph interpreting the results.
+
+```{r}
+# get motif database
+motifs <- MotifDb::query(MotifDb, c("HOCOMOCOv10","Mmusculus"))
+# convert to a format motifmatchr can use, and use the gene symbols as names
+motifs <- do.call(TFBSTools::PWMatrixList, setNames(
+           universalmotif::convert_motifs(motifs, class="TFBSTools-PWMatrix"),
+           mcols(motifs)$geneSymbol))
+motifs
+```
+
+```{r}
+# preparing the genome sequence file
+ah <- AnnotationHub()
+genome <- ah[["AH68356"]]
+genome <- import(genome)
+```
+
+```{r}
+se <- readRDS("mm38_hippo.rds")
+se
+
+colData(se)$condition <- sub("_.*", "", colnames(se))
+colData(se)$sex <- sub("^[^_]+_([^_]+)_.*", "\\1", colnames(se))
+
+row.names(se) <- as.character(granges(se))
+se
+
+# GC bias
+se <- chromVAR::addGCBias(se, genome=genome)
+# rowData(se)
+# hist(rowData(se)$bias)
+```
+
+```{r}
+# find motifs in each peak
+moi <- motifmatchr::matchMotifs(motifs, subject=se, genome=genome)
+# head(assay(moi))
+
+# normalize accessibility score
+set.seed(1234)
+bg <- chromVAR::getBackgroundPeaks(se, niterations=500)
+dev <- chromVAR::computeDeviations(object = se, annotations=moi,
+                                   background_peaks=bg)
+head(assay(dev, "z"))
+```
+
+## 1. Comparing stressed (denoted ‘FSS’ – forced swim stress) and control animals
+
+```{r}
+dev$condition
+dev$condition <- factor(dev$condition)
+dev$condition <- relevel(dev$condition, "Control") # to set the baseline condition
+dev$condition
+mm_condition <- model.matrix(~condition, data=as.data.frame(colData(dev)))
+head(mm_condition)
+
+fit_condition <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm_condition))
+# we select, from the columns of model.matrix `mm`, the coefficient we want to test:
+# can use contrast to test as well
+res_condition <- as.data.frame(limma::topTable(fit_condition, coef="conditionFSS", number = Inf))
+head(res_condition)
+head(assay(dev))
+metadata(dev)$anno_colors <- list(condition=c(Control="lightgrey", FSS="darkred"))
+sechm::sechm(dev, features = head(res_condition$ID), assayName="z", top_annotation = "condition")
+```
+
+Based on the heatmap, MSX2, PRGR, GCR and ANDR show the most significant difference in motif accessibility between control and stressed (FSS) animals. These motifs tend to increase accessibility under stress condition, suggesting they play a role in stress response.
+
+## 2. Comparing male and female animals
+
+```{r}
+order_by_sex <- order(colData(dev)$sex)
+dev <- dev[ , order_by_sex]
+
+dev$sex
+dev$sex <- factor(dev$sex)
+dev$sex <- relevel(dev$sex, "female") # to set the baseline condition
+dev$sex
+mm_sex <- model.matrix(~sex, data=as.data.frame(colData(dev)))
+head(mm_sex)
+
+fit_sex <- limma::eBayes(limma::lmFit(object = assays(dev)$z, design = mm_sex))
+
+
+# we select, from the columns of model.matrix `mm`, the coefficient we want to test:
+# can use contrast to test as well
+res_sex <- as.data.frame(limma::topTable(fit_sex, coef="sexmale", number = Inf))
+head(res_sex)
+# head(assay(dev))
+metadata(dev)$anno_colors <- list(condition = c(Control = "lightgrey", FSS = "darkred"),
+  sex = c(female = "lightblue", male = "darkblue"))
+sechm::sechm(dev, features = head(res_sex$ID), assayName="z", top_annotation = "sex")
+```
+
+Based on the heatmap, TYY1, TEAD1, ZN143, RUNX3, PTF1A and MYB show the most significant difference in motif accessibility between male and female animals. These motifs show higher accessibility in female samples and lower accessibility in male samples, suggesting sex-specific differences in motif accessibility.
