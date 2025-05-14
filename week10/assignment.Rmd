@@ -1,0 +1,99 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-05-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressPackageStartupMessages({
+  library(GenomicRanges)
+  library(epiwraps)
+  library(ggplot2)
+  library(rGREAT) # Gene Ontology enrichment among genomic regions
+})
+```
+
+# Download and decompress the following archive:
+  * https://ethz-ins.org/content/w10.assignment.zip
+  * This contains the bigwig files and peaks (bed) files for three TFs of the CREB family (all restricted to chr1; aligned against the hg38 genome)
+  
+```{r}
+options(timeout = 6000)
+download.file("https://ethz-ins.org/content/w10.assignment.zip", "w10.assignment.zip")
+unzip("w10.assignment.zip")
+list.files()
+```
+
+Prepare the regions and the tracks
+
+```{r}
+tracks <- list.files(pattern="Creb.*\\.bw$")
+
+peaks <- list.files(pattern="Creb.*\\.bed$")
+# we first import the peaks
+peaks <- lapply(peaks, rtracklayer::import.bed)
+# we'll focus on the high-quality peaks
+peaks <- lapply(peaks, FUN=function(x) x[x$score>800])
+# we get the union of non-redundant regions
+regions <- reduce(unlist(GRangesList(peaks)))
+```
+  
+# Use clustering and visualization to illustrate the relationship between the binding of the different proteins
+
+Clustering using relative signals
+```{r}
+set.seed(123)
+ese <- signal2Matrix(tracks, regions, extend=2000)
+cl <- clusterSignalMatrices(ese, k=4, scaleRows = TRUE)
+rowData(ese)$cluster <- cl
+```
+
+Plot clusters:
+```{r}
+mycolors <- c("1"="red", "2"="blue", "3"="darkgreen", "4"="black")
+plotEnrichedHeatmaps(ese, row_split="cluster", mean_color=mycolors, scale_rows = "global")
+```
+
+Plot just the averages:
+```{r}
+d <- meltSignals(ese, splitBy=cl)
+ggplot(d, aes(position, mean, colour=sample)) + geom_line() + facet_wrap(~split)
+```
+
+# Use enrichment analysis (either GO or motif) on at least one of the clusters
+
+Find and plot what's enriched in cluster 1 with respect to the others:
+
+```{r,fig.width=9, fig.height=6}
+split_regions <- split(rowRanges(ese), rowData(ese)$cluster)
+lengths(split_regions)
+
+res1 <- great(split_regions[["1"]], gene_sets="GO:BP", tss_source="hg38", 
+             background=regions, cores=2)
+bp1 <- getEnrichmentTables(res1)
+ggplot(head(bp1,15), aes(fold_enrichment, reorder(description, p_adjust), 
+                        size=observed_region_hits, color=-log10(p_adjust))) + 
+  geom_point() + scale_color_viridis_c() + ggtitle("Cluster 1 GO enrichment analysis")
+```
+
+Find and plot what's enriched in cluster 3 with respect to the others:
+
+```{r,fig.width=9, fig.height=6}
+res3 <- great(split_regions[["3"]], gene_sets="GO:BP", tss_source="hg38", 
+             background=regions, cores=2)
+bp3 <- getEnrichmentTables(res3)
+ggplot(head(bp3,15), aes(fold_enrichment, reorder(description, p_adjust), 
+                        size=observed_region_hits, color=-log10(p_adjust))) + 
+  geom_point() + scale_color_viridis_c() + ggtitle("Cluster 3 GO enrichment analysis")
+```
+
+
+# Write a paragraph describing your results
+In Cluster 1, where CREB1 shows strong signal, the heatmaps indicate very weak signals for CREB3 and CREB3L1. In contrast, clusters with weaker CREB1 signals show stronger CREB3 and/or CREB3L1 signals to varying degrees. This suggests a possible compensatory mechanism or context-specific regulation between these transcription factors.
+
+GO enrichment analysis of Cluster 1 indicates that CREB1 is mainly associated with general cell development and morphogenesis. In cluster 3, CREB3 dominates, and the enriched functions are mainly related to stress signalling and immune response. This suggests that CREB3 may supplement CREB1 activity when CREB1 is downregulated, especially in stress or immune-related states. 
