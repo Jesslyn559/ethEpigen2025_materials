@@ -1,0 +1,86 @@
+---
+title: "assignment"
+author: "Jesslyn Jesslyn"
+date: "2025-05-17"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(ggplot2)
+  library(AnnotationHub)
+  library(ensembldb)
+  library(edgeR)
+  library(rtracklayer)
+  library(BiocParallel)
+  library(bsseq)   # Class and tools to analyze bisulfite sequencing data at CpG-level
+  library(DMRcate) # Identification of differentially-methylated regions
+  library(rGREAT)
+})
+```
+
+## 1. Plot a heatmap of the methylation levels of the genes in top 20 DMRs located on chr1. You may either do this as we did for promoters during the practical (i.e. using `getMeth()`), or using `signal2Matrix()` and `plotEnrichedHeatmaps()`.
+
+```{r}
+dmrRanges <- readRDS("dmr.rds") #from practical
+genes <- readRDS("hg19_chr1_genes.rds") #from practical
+# head(dmrRanges)
+```
+
+Filter for DMRs in chr1, then filter for the top 20 DMRs
+
+```{r}
+dmr_chr1 <- dmrRanges[seqnames(dmrRanges) == "chr1"]
+dmr_chr1 <- dmr_chr1[order(dmr_chr1$HMFDR),]
+dmr_top20_chr1 <- head(dmr_chr1,20)
+```
+
+Find genes that are in the filtered DMRs
+
+```{r}
+dmr_genes <- genes[overlapsAny(genes, dmr_top20_chr1)]
+```
+
+Filters out CpGs with 0 coverage and smooths methylation data
+
+```{r, warning=FALSE, message=FALSE}
+bs <- readRDS("ESC_astrocytes_BSseq.rds")
+# remove CpGs that have 0 coverage in some samples:
+bs <- bs[rowSums(assay(bs,"Cov")>1)==ncol(bs),]
+bs <- BSmooth(bs, BPPARAM=MulticoreParam(4, progress=FALSE))
+```
+
+```{r, fig.width=10, fig.height=6}
+# Visualize methylation level of genes in top 20 DMRs in chr1
+dmrs <- bsseq::getMeth(bs, regions=dmr_genes, what="perRegion")
+colnames(dmrs) <- colnames(bs)
+pheatmap(dmrs, name="methylation")
+```
+
+## 2. Run an enrichment analysis (rGREAT) of the significant DMRs from the practical against the entire genome. Describe what your enrichment analysis is testing exactly & describe the results
+
+```{r}
+# head(dmrRanges)
+res <- great(dmrRanges, gene_sets="GO:BP", tss_source="hg19", cores=2)
+bp <- getEnrichmentTables(res)
+# head(bp)
+```
+
+```{r, fig.width=10, fig.height=6}
+ggplot(head(bp,15), aes(fold_enrichment, reorder(description, p_adjust), 
+                        size=observed_region_hits, color=-log10(p_adjust))) + 
+  geom_point() + scale_color_viridis_c()
+```
+
+The enrichment analysis describes whether the significant DMRs (differentially methylated regions between ESCs and astrocytes) are associated with specific biological processes more frequently than expected by chance, as compared to the rest of the genome.
+
+The results show that the DMRs identified between ESCs and astrocytes are significantly enriched in the following biological processes:
+
+1.  Developmental (eg. regulation of somitogenesis, lobar bronchus development)
+
+2.  Transcription (eg. regulation of transcription by RNA polymerase II, transcription by RNA polymerase II)
+
+3.  Metabolic (eg. cellular response to fructose stimulus, negative regulation of nucleotide catabolic process)
+
+This suggests that significant changes in DNA methylation levels during astrocyte differentiation may be involved in development and metabolic processes.
